@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laplacian Filter Visualization</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #e0e0e0;
+            --grid-border: #333;
+            --highlight-color: #00ff88;
+            --neighbor-color: #00bcd4;
+            --kernel-color: #ff5722;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 { margin-bottom: 10px; }
+        p { color: #aaa; margin-bottom: 20px; max-width: 600px; text-align: center; }
+
+        /* Layout */
+        .main-container {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(10, 30px);
+            grid-template-rows: repeat(10, 30px);
+            gap: 2px;
+            background-color: #000;
+            padding: 5px;
+            border: 2px solid #555;
+            border-radius: 4px;
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 10px;
+            color: #fff;
+            user-select: none;
+        }
+
+        /* Kernel Styling */
+        .kernel-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 40px);
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+        .kernel-cell {
+            width: 40px;
+            height: 40px;
+            background-color: var(--kernel-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+
+        /* Highlights */
+        .cell.active-center {
+            border: 2px solid var(--highlight-color);
+            z-index: 10;
+        }
+        .cell.active-neighbor {
+            border: 2px solid var(--neighbor-color);
+            opacity: 0.8;
+        }
+        .cell.processed {
+            /* border: 1px solid #444; */
+        }
+
+        /* Controls & Info */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: var(--highlight-color);
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        .info-panel {
+            width: 100%;
+            max-width: 800px;
+            background-color: #222;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #444;
+            font-family: 'Courier New', Courier, monospace;
+            min-height: 100px;
+        }
+
+        .equation {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+        .highlight-val { color: var(--highlight-color); font-weight: bold; }
+        .neighbor-val { color: var(--neighbor-color); font-weight: bold; }
+        .kernel-val { color: var(--kernel-color); font-weight: bold; }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .dot { width: 10px; height: 10px; display: inline-block; margin-right: 5px; }
+
+    </style>
+</head>
+<body>
+
+    <h1>Laplacian Filter Visualizer</h1>
+    <p>The Laplacian filter detects edges by calculating the 2nd derivative of intensity. It highlights areas of rapid intensity change.</p>
+
+    <div class="legend">
+        <div><span class="dot" style="background:var(--highlight-color)"></span>Center Pixel</div>
+        <div><span class="dot" style="background:var(--neighbor-color)"></span>Neighbors</div>
+        <div><span class="dot" style="background:var(--kernel-color)"></span>Kernel</div>
+    </div>
+
+    <div class="main-container">
+        <!-- Source Image -->
+        <div class="column">
+            <h3>Source Image (Input)</h3>
+            <div class="grid-container" id="sourceGrid"></div>
+        </div>
+
+        <!-- Kernel -->
+        <div class="column">
+            <h3>The Kernel</h3>
+            <div class="kernel-grid">
+                <div class="kernel-cell">0</div><div class="kernel-cell">1</div><div class="kernel-cell">0</div>
+                <div class="kernel-cell">1</div><div class="kernel-cell">-4</div><div class="kernel-cell">1</div>
+                <div class="kernel-cell">0</div><div class="kernel-cell">1</div><div class="kernel-cell">0</div>
+            </div>
+            <div style="font-size: 30px;">&#8594;</div>
+        </div>
+
+        <!-- Result Image -->
+        <div class="column">
+            <h3>Result Feature Map</h3>
+            <div class="grid-container" id="resultGrid"></div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <div style="margin-bottom: 5px; font-weight: bold;">Current Calculation (Convolution):</div>
+        <div class="equation" id="calcDisplay">Waiting to start...</div>
+    </div>
+
+    <div class="controls">
+        <button id="btnStart" onclick="startAnimation()">Start Visualization</button>
+        <button id="btnPause" onclick="pauseAnimation()" disabled>Pause</button>
+        <button id="btnReset" onclick="reset()">Reset</button>
+        <label>
+            Speed: <input type="range" id="speedRange" min="10" max="500" value="50">
+        </label>
+    </div>
+
+<script>
+    // --- Configuration ---
+    const GRID_SIZE = 10;
+    const LAPLACIAN_KERNEL = [
+        [0,  1, 0],
+        [1, -4, 1],
+        [0,  1, 0]
+    ];
+    
+    // --- State ---
+    let sourceData = [];
+    let resultData = [];
+    let isRunning = false;
+    let timer = null;
+    let currentIdx = 0; // 0 to 99
+
+    // --- DOM Elements ---
+    const sourceGridEl = document.getElementById('sourceGrid');
+    const resultGridEl = document.getElementById('resultGrid');
+    const calcDisplay = document.getElementById('calcDisplay');
+    const btnStart = document.getElementById('btnStart');
+    const btnPause = document.getElementById('btnPause');
+    const speedRange = document.getElementById('speedRange');
+
+    // --- Initialization ---
+    function init() {
+        sourceData = new Array(GRID_SIZE * GRID_SIZE).fill(50); // Background dark grey
+        resultData = new Array(GRID_SIZE * GRID_SIZE).fill(0);
+
+        // Create a shape (Square) in the source image
+        for (let y = 2; y < 8; y++) {
+            for (let x = 2; x < 8; x++) {
+                sourceData[y * GRID_SIZE + x] = 200; // Bright square
+            }
+        }
+
+        renderGrid(sourceGridEl, sourceData, 'src');
+        renderGrid(resultGridEl, resultData, 'res');
+    }
+
+    // --- Rendering Helpers ---
+    function renderGrid(container, data, prefix) {
+        container.innerHTML = '';
+        data.forEach((val, idx) => {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.id = `${prefix}-${idx}`;
+            cell.textContent = val;
+            
+            // Visual grayscale
+            const colorVal = Math.min(255, Math.max(0, val));
+            cell.style.backgroundColor = `rgb(${colorVal}, ${colorVal}, ${colorVal})`;
+            
+            // Adjust text color for contrast
+            cell.style.color = colorVal > 128 ? '#000' : '#fff';
+            
+            container.appendChild(cell);
+        });
+    }
+
+    function getPixel(data, x, y) {
+        if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return 0; // Zero padding
+        return data[y * GRID_SIZE + x];
+    }
+
+    // --- Animation Logic ---
+    function startAnimation() {
+        if (isRunning) return;
+        isRunning = true;
+        btnStart.disabled = true;
+        btnPause.disabled = false;
+        loop();
+    }
+
+    function pauseAnimation() {
+        isRunning = false;
+        clearTimeout(timer);
+        btnStart.disabled = false;
+        btnPause.disabled = true;
+    }
+
+    function reset() {
+        pauseAnimation();
+        currentIdx = 0;
+        resultData.fill(0);
+        
+        // Clear styles
+        document.querySelectorAll('.cell').forEach(c => {
+            c.classList.remove('active-center', 'active-neighbor');
+        });
+        
+        renderGrid(resultGridEl, resultData, 'res');
+        calcDisplay.textContent = "Reset complete.";
+    }
+
+    function loop() {
+        if (!isRunning) return;
+
+        // Process current pixel
+        processPixel(currentIdx);
+
+        // Move to next
+        currentIdx++;
+        if (currentIdx >= GRID_SIZE * GRID_SIZE) {
+            pauseAnimation();
+            calcDisplay.innerHTML = "<span style='color:#00ff88'>Processing Complete! Notice how the edges (transitions from 50 to 200) light up in the Result.</span>";
+            return;
+        }
+
+        const speed = 510 - parseInt(speedRange.value); // Invert slider
+        timer = setTimeout(loop, speed);
+    }
+
+    function processPixel(index) {
+        // Clear previous highlights
+        document.querySelectorAll('.active-center, .active-neighbor').forEach(el => {
+            el.classList.remove('active-center', 'active-neighbor');
+        });
+
+        const cx = index % GRID_SIZE;
+        const cy = Math.floor(index / GRID_SIZE);
+
+        // Do not process borders to keep convolution 'valid' visually (or we can padding)
+        // Let's do zero-padding logic but highlight neighbors
+        
+        // Highlight Center Source
+        const centerEl = document.getElementById(`src-${index}`);
+        if(centerEl) centerEl.classList.add('active-center');
+
+        let sum = 0;
+        let equationHTML = "";
+
+        // Iterate Kernel (3x3) around cx, cy
+        // Kernel relative coordinates: -1 to +1
+        for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+                const nx = cx + kx;
+                const ny = cy + ky;
+                
+                const pixelVal = getPixel(sourceData, nx, ny);
+                const kernelVal = LAPLACIAN_KERNEL[ky+1][kx+1];
+
+                // Highlight neighbors in Source
+                if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+                    const neighborIdx = ny * GRID_SIZE + nx;
+                    const neighborEl = document.getElementById(`src-${neighborIdx}`);
+                    if (neighborIdx !== index) {
+                        neighborEl.classList.add('active-neighbor');
+                    }
+                }
+
+                sum += pixelVal * kernelVal;
+
+                // Add to equation string (skip 0 multiplications for readability)
+                if (kernelVal !== 0) {
+                    equationHTML += `(<span class="neighbor-val">${pixelVal}</span> * <span class="kernel-val">${kernelVal}</span>) + `;
+                }
+            }
+        }
+
+        // Clean up equation string
+        equationHTML = equationHTML.slice(0, -3); // remove last " + "
+        
+        // Laplacian can be negative. For visualization we usually take Absolute value or clip.
+        // We will visualize Abs value for the resulting image brightness
+        const displayVal = Math.abs(sum);
+
+        equationHTML += ` = <strong>${sum}</strong>`;
+        equationHTML += `<br>Result Pixel Intensity (Abs) = <span class="highlight-val">${displayVal}</span>`;
+
+        calcDisplay.innerHTML = equationHTML;
+
+        // Update Result Grid
+        resultData[index] = displayVal;
+        const resCell = document.getElementById(`res-${index}`);
+        resCell.textContent = displayVal;
+        
+        // Highlight active result cell
+        resCell.classList.add('active-center');
+
+        // Update Color
+        const colorVal = Math.min(255, Math.max(0, displayVal));
+        resCell.style.backgroundColor = `rgb(${colorVal}, ${colorVal}, ${colorVal})`;
+        resCell.style.color = colorVal > 128 ? '#000' : '#fff';
+    }
+
+    // Start
+    init();
+
+</script>
+</body>
+</html>
